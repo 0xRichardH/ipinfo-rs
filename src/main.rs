@@ -46,7 +46,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_request_ipinfo() {
+    fn it_requests_ipinfo_success() {
         let mut s = mockito::Server::new();
         let url = s.url();
         let body = r#"
@@ -67,5 +67,25 @@ mod tests {
 
         let result = request_ipinfo(url.as_str());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[should_panic(expected = "Something unexpected happened: 500")]
+    fn it_requests_ipinfo_failed_when_invalid_status_code() {
+        let mut s = mockito::Server::new();
+        let url = s.url();
+        s.mock("GET", "/").with_status(500).create();
+
+        let _ = request_ipinfo(url.as_str());
+    }
+
+    #[test]
+    #[should_panic(expected = "The response JSON is not valid")]
+    fn it_requests_ipinfo_failed_when_invalid_response_body() {
+        let mut s = mockito::Server::new();
+        let url = s.url();
+        s.mock("GET", "/").with_status(200).create();
+
+        let _ = request_ipinfo(url.as_str());
     }
 }
