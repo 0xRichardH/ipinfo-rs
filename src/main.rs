@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
+
 use reqwest::blocking::get;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -11,28 +16,46 @@ struct IpInfo {
     country: String,
     loc: String,
     org: String,
-    postal: String,
     timezone: String,
 }
 
-fn main() -> Result<(), reqwest::Error> {
-    let url = "https://ipinfo.io";
-    request_ipinfo(url)
+#[derive(Debug)]
+enum RequestIpinfoError {
+    Request(reqwest::Error),
+    JsonDecode(reqwest::Error),
+    Http(StatusCode),
 }
 
-fn request_ipinfo(url: &str) -> Result<(), reqwest::Error> {
-    let resp = get(url)?;
-    match resp.status() {
-        StatusCode::OK => match resp.json::<IpInfo>() {
-            Ok(info) => pretty_print(info),
-            Err(_) => panic!("The response JSON is not valid"),
-        },
-        other => {
-            panic!("Something unexpected happened: {:?}", other);
+impl Display for RequestIpinfoError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use RequestIpinfoError::*;
+        match self {
+            Request(e) => write!(f, "Request error: {}", e),
+            JsonDecode(_) => write!(f, "The response JSON is not valid"),
+            Http(code) => write!(f, "Something unexpected happened: HTTP code is {}", code),
         }
     }
+}
 
-    Ok(())
+impl Error for RequestIpinfoError {}
+
+fn main() {
+    let url = "https://ipinfo.io";
+    let result = request_ipinfo(url);
+    match result {
+        Ok(info) => pretty_print(info),
+        Err(err) => eprintln!("{}", err),
+    }
+}
+
+fn request_ipinfo(url: &str) -> Result<IpInfo, RequestIpinfoError> {
+    let resp = get(url).map_err(RequestIpinfoError::Request)?;
+    match resp.status() {
+        StatusCode::OK => resp
+            .json::<IpInfo>()
+            .map_err(RequestIpinfoError::JsonDecode),
+        other => Err(RequestIpinfoError::Http(other)),
+    }
 }
 
 fn pretty_print(info: IpInfo) {
@@ -70,22 +93,22 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Something unexpected happened: 500")]
     fn it_requests_ipinfo_failed_when_invalid_status_code() {
         let mut s = mockito::Server::new();
         let url = s.url();
         s.mock("GET", "/").with_status(500).create();
 
-        let _ = request_ipinfo(url.as_str());
+        let result = request_ipinfo(url.as_str());
+        assert!(result.is_err());
     }
 
     #[test]
-    #[should_panic(expected = "The response JSON is not valid")]
     fn it_requests_ipinfo_failed_when_invalid_response_body() {
         let mut s = mockito::Server::new();
         let url = s.url();
         s.mock("GET", "/").with_status(200).create();
 
-        let _ = request_ipinfo(url.as_str());
+        let result = request_ipinfo(url.as_str());
+        assert!(result.is_err());
     }
 }
