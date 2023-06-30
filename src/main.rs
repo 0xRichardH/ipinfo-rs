@@ -8,7 +8,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use tabled::{Table, Tabled};
 
-#[derive(Deserialize, Tabled)]
+#[derive(Debug, Deserialize, Tabled)]
 struct IpInfo {
     ip: String,
     city: String,
@@ -32,7 +32,11 @@ impl Display for RequestIpinfoError {
         match self {
             Request(e) => write!(f, "Request error: {}", e),
             JsonDecode(_) => write!(f, "The response JSON is not valid"),
-            Http(code) => write!(f, "Something unexpected happened: HTTP code is {}", code),
+            Http(code) => write!(
+                f,
+                "Something unexpected happened: the server responded with {}",
+                code
+            ),
         }
     }
 }
@@ -100,6 +104,10 @@ mod tests {
 
         let result = request_ipinfo(url.as_str());
         assert!(result.is_err());
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "Something unexpected happened: the server responded with 500 Internal Server Error"
+        );
     }
 
     #[test]
@@ -110,5 +118,9 @@ mod tests {
 
         let result = request_ipinfo(url.as_str());
         assert!(result.is_err());
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "The response JSON is not valid"
+        );
     }
 }
