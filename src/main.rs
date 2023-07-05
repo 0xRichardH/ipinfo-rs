@@ -1,12 +1,8 @@
-use std::{
-    error::Error,
-    fmt::{self, Display},
-};
-
 use reqwest::blocking::get;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use tabled::{Table, Tabled};
+use thiserror::Error;
 
 #[derive(Debug, Deserialize, Tabled)]
 struct IpInfo {
@@ -19,29 +15,15 @@ struct IpInfo {
     timezone: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum RequestIpinfoError {
+    #[error("Request error: {0}")]
     Request(reqwest::Error),
+    #[error("The response JSON is not valid")]
     JsonDecode(reqwest::Error),
+    #[error("Something unexpected happened: the server responded with {0}")]
     Http(StatusCode),
 }
-
-impl Display for RequestIpinfoError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use RequestIpinfoError::*;
-        match self {
-            Request(e) => write!(f, "Request error: {}", e),
-            JsonDecode(_) => write!(f, "The response JSON is not valid"),
-            Http(code) => write!(
-                f,
-                "Something unexpected happened: the server responded with {}",
-                code
-            ),
-        }
-    }
-}
-
-impl Error for RequestIpinfoError {}
 
 fn main() {
     let url = "https://ipinfo.io";
