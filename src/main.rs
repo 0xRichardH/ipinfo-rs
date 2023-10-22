@@ -2,28 +2,38 @@ mod error;
 mod prelude;
 mod utils;
 
+use reqwest::StatusCode;
+
 use crate::prelude::*;
-use reqwest::blocking::get;
 
 const IPINFO_URL: &str = "https://ipinfo.io";
 
-fn main() -> Result<()> {
-    request_ipinfo(IPINFO_URL)?.pretty_print();
+#[tokio::main]
+async fn main() -> Result<()> {
+    request_ipinfo(IPINFO_URL).await?.pretty_print();
 
     Ok(())
 }
 
-fn request_ipinfo(url: &str) -> Result<IpInfo> {
-    let resp = get(url).map_err(RequestIpinfoError::Request)?;
-    W(resp).try_into()
+async fn request_ipinfo(url: &str) -> Result<IpInfo> {
+    let resp = reqwest::get(url)
+        .await
+        .map_err(RequestIpinfoError::Request)?;
+    match resp.status() {
+        StatusCode::OK => resp
+            .json::<IpInfo>()
+            .await
+            .map_err(RequestIpinfoError::JsonDecode),
+        other => Err(RequestIpinfoError::Http(other)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_requests_ipinfo_success() {
+    #[tokio::test]
+    async fn it_requests_ipinfo_success() {
         let mut s = mockito::Server::new();
         let url = s.url();
         let body = r#"
@@ -42,17 +52,17 @@ mod tests {
     "#;
         s.mock("GET", "/").with_status(200).with_body(body).create();
 
-        let result = request_ipinfo(url.as_str());
+        let result = request_ipinfo(url.as_str()).await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn it_requests_ipinfo_failed_when_invalid_status_code() {
+    #[tokio::test]
+    async fn it_requests_ipinfo_failed_when_invalid_status_code() {
         let mut s = mockito::Server::new();
         let url = s.url();
         s.mock("GET", "/").with_status(500).create();
 
-        let result = request_ipinfo(url.as_str());
+        let result = request_ipinfo(url.as_str()).await;
         assert!(result.is_err());
         assert_eq!(
             format!("{}", result.unwrap_err()),
@@ -60,13 +70,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn it_requests_ipinfo_failed_when_invalid_response_body() {
+    #[tokio::test]
+    async fn it_requests_ipinfo_failed_when_invalid_response_body() {
         let mut s = mockito::Server::new();
         let url = s.url();
         s.mock("GET", "/").with_status(200).create();
 
-        let result = request_ipinfo(url.as_str());
+        let result = request_ipinfo(url.as_str()).await;
         assert!(result.is_err());
         assert_eq!(
             format!("{}", result.unwrap_err()),
