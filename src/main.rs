@@ -1,8 +1,11 @@
+mod error;
+mod prelude;
+
+use crate::prelude::*;
 use reqwest::blocking::get;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use tabled::{Table, Tabled};
-use thiserror::Error;
 
 #[derive(Debug, Deserialize, Tabled)]
 struct IpInfo {
@@ -15,26 +18,16 @@ struct IpInfo {
     timezone: String,
 }
 
-#[derive(Debug, Error)]
-enum RequestIpinfoError {
-    #[error("Request error: {0}")]
-    Request(reqwest::Error),
-    #[error("The response JSON is not valid")]
-    JsonDecode(reqwest::Error),
-    #[error("Something unexpected happened: the server responded with {0}")]
-    Http(StatusCode),
+const IPINFO_URL: &str = "https://ipinfo.io";
+
+fn main() -> Result<()> {
+    let info = request_ipinfo(IPINFO_URL)?;
+    pretty_print(info);
+
+    Ok(())
 }
 
-fn main() {
-    let url = "https://ipinfo.io";
-    let result = request_ipinfo(url);
-    match result {
-        Ok(info) => pretty_print(info),
-        Err(err) => eprintln!("{}", err),
-    }
-}
-
-fn request_ipinfo(url: &str) -> Result<IpInfo, RequestIpinfoError> {
+fn request_ipinfo(url: &str) -> Result<IpInfo> {
     let resp = get(url).map_err(RequestIpinfoError::Request)?;
     match resp.status() {
         StatusCode::OK => resp
