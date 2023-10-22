@@ -1,46 +1,21 @@
 mod error;
 mod prelude;
+mod utils;
 
 use crate::prelude::*;
 use reqwest::blocking::get;
-use reqwest::StatusCode;
-use serde::Deserialize;
-use tabled::{Table, Tabled};
-
-#[derive(Debug, Deserialize, Tabled)]
-struct IpInfo {
-    ip: String,
-    city: String,
-    region: String,
-    country: String,
-    loc: String,
-    org: String,
-    timezone: String,
-}
 
 const IPINFO_URL: &str = "https://ipinfo.io";
 
 fn main() -> Result<()> {
-    let info = request_ipinfo(IPINFO_URL)?;
-    pretty_print(info);
+    request_ipinfo(IPINFO_URL)?.pretty_print();
 
     Ok(())
 }
 
 fn request_ipinfo(url: &str) -> Result<IpInfo> {
     let resp = get(url).map_err(RequestIpinfoError::Request)?;
-    match resp.status() {
-        StatusCode::OK => resp
-            .json::<IpInfo>()
-            .map_err(RequestIpinfoError::JsonDecode),
-        other => Err(RequestIpinfoError::Http(other)),
-    }
-}
-
-fn pretty_print(info: IpInfo) {
-    let ipinfos = vec![info];
-    let table = Table::new(ipinfos).to_string();
-    println!("{}", table);
+    W(resp).try_into()
 }
 
 #[cfg(test)]
